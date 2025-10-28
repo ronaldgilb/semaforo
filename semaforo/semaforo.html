@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Semáforo - Simulación</title>
+  <style>
+    /* Contenedor del semáforo */
+    .semaforo {
+      width: 120px;
+      background: #222;
+      padding: 18px;
+      border-radius: 16px;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.6), inset 0 -6px 12px rgba(0,0,0,0.4);
+      margin: 40px auto;
+    }
+
+    /* Cada luz (círculo) */
+    .luz {
+      width: 72px;
+      height: 72px;
+      margin: 12px auto;
+      border-radius: 50%;
+      background: rgba(0,0,0,0.5); /* apagada (oscura) */
+      filter: drop-shadow(0 6px 10px rgba(0,0,0,0.6));
+      transition: background 250ms, box-shadow 250ms;
+    }
+
+    /* Colores base cuando están encendidas */
+    .luz.encendida.rojo {
+      background: #ff2e2e;
+      box-shadow: 0 0 26px #ff2e2e;
+    }
+    .luz.encendida.amarillo {
+      background: #ffd92e;
+      box-shadow: 0 0 26px #ffd92e;
+    }
+    .luz.encendida.verde {
+      background: #2eff6b;
+      box-shadow: 0 0 26px #2eff6b;
+    }
+
+    /* Controles */
+    .controles {
+      text-align: center;
+      margin-top: 18px;
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    button {
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      background: #f4f4f4;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    button:active { transform: translateY(1px); }
+    button.small { padding: 6px 10px; font-size: 0.9rem; }
+
+    /* Texto informativo */
+    .estado {
+      text-align: center;
+      margin-top: 10px;
+      font-family: sans-serif;
+      font-weight: 600;
+    }
+
+    /* Responsive */
+    @media (max-width: 380px) {
+      .semaforo { transform: scale(0.9); }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="semaforo" aria-label="Semáforo de simulación">
+      <div id="luzRojo" class="luz rojo" aria-hidden="true"></div>
+      <div id="luzAmarillo" class="luz amarillo" aria-hidden="true"></div>
+      <div id="luzVerde" class="luz verde" aria-hidden="true"></div>
+    </div>
+
+    <div class="controles" role="region" aria-label="Controles del semáforo">
+      <button id="arrancar">Arrancar</button>
+      <button id="detener">Detener</button>
+      <button id="siguiente" class="small">Siguiente</button>
+      <button id="modoManual" class="small">Modo Manual</button>
+    </div>
+
+    <div id="estadoTexto" class="estado" aria-live="polite">Semáforo detenido</div>
+  </main>
+
+  <script>
+    // Elementos
+    const luzRojo = document.getElementById('luzRojo');
+    const luzAmarillo = document.getElementById('luzAmarillo');
+    const luzVerde = document.getElementById('luzVerde');
+    const estadoTexto = document.getElementById('estadoTexto');
+
+    const btnArrancar = document.getElementById('arrancar');
+    const btnDetener = document.getElementById('detener');
+    const btnSiguiente = document.getElementById('siguiente');
+    const btnModoManual = document.getElementById('modoManual');
+
+    // Estado del semáforo
+    const ESTADOS = ['ROJO', 'ROJO_AMARILLO', 'VERDE', 'AMARILLO']; // secuencia clásica
+    let indice = 0;
+    let intervaloId = null;
+    let modoManual = false;
+
+    // Duraciones en ms (ajustables)
+    const DURACIONES = {
+      ROJO: 3000,
+      ROJO_AMARILLO: 1000,
+      VERDE: 4000,
+      AMARILLO: 1500
+    };
+
+    // Apagar todas las luces
+    function apagarTodas() {
+      luzRojo.classList.remove('encendida');
+      luzAmarillo.classList.remove('encendida');
+      luzVerde.classList.remove('encendida');
+    }
+
+    // Mostrar estado por nombre
+    function mostrarEstado(nombre) {
+      apagarTodas();
+      if (nombre === 'ROJO') {
+        luzRojo.classList.add('encendida');
+        estadoTexto.textContent = 'ROJO — Detener';
+      } else if (nombre === 'ROJO_AMARILLO') {
+        luzRojo.classList.add('encendida');
+        luzAmarillo.classList.add('encendida');
+        estadoTexto.textContent = 'ROJO + AMARILLO — Prepararse';
+      } else if (nombre === 'VERDE') {
+        luzVerde.classList.add('encendida');
+        estadoTexto.textContent = 'VERDE — Avanzar';
+      } else if (nombre === 'AMARILLO') {
+        luzAmarillo.classList.add('encendida');
+        estadoTexto.textContent = 'AMARILLO — Precaución';
+      }
+    }
+
+    // Avanzar al siguiente estado y programar el siguiente cambio
+    function siguienteEstado() {
+      const estadoActual = ESTADOS[indice];
+      mostrarEstado(estadoActual);
+
+      // preparar índice para la próxima vez
+      indice = (indice + 1) % ESTADOS.length;
+    }
+
+    // Arrancar ciclo automático
+    function arrancar() {
+      if (intervaloId !== null) return; // ya arrancado
+      modoManual = false;
+      btnModoManual.textContent = 'Modo Manual';
+      // Empezar desde el índice actual
+      siguienteEstado();
+      // programar cambios con duraciones según el estado mostrado
+      intervaloId = setInterval(() => {
+        // Como mostramos estado y luego avanzamos índice en siguienteEstado,
+        // tenemos que calcular el estado que está activo justo ahora:
+        const estadoPrev = ESTADOS[(indice + ESTADOS.length - 1) % ESTADOS.length];
+        // tiempo para el estado siguiente (el que se mostrará al llamar siguienteEstado ahora)
+        const tiempo = DURACIONES[ESTADOS[indice]] || 2000;
+        // hacer el cambio
+        siguienteEstado();
+        // ajustar setInterval no es trivial; en vez de cambiar intervalo dinámicamente,
+        // usamos clearInterval y reprogramamos con setTimeout para respetar duraciones exactas.
+        clearInterval(intervaloId);
+        intervaloId = null;
+        // si no estamos en modo manual reprogramamos con setTimeout
+        if (!modoManual) {
+          intervaloId = setIntervalWrapper();
+        }
+      }, 0); // inmediata; el wrapper reprogramará de forma correcta
+      // limpiar y crear la programación correcta
+      clearInterval(intervaloId);
+      intervaloId = null;
+      intervaloId = setIntervalWrapper();
+    }
+
+    // Helper para programar intervalos respetando duraciones variables
+    function setIntervalWrapper() {
+      let timer = null;
+      function step() {
+        const estado = ESTADOS[indice];
+        mostrarEstado(estado);
+        const tiempo = DURACIONES[estado] || 2000;
+        // preparar siguiente índice
+        indice = (indice + 1) % ESTADOS.length;
+        timer = setTimeout(step, tiempo);
+      }
+      step();
+      // devolvemos un objeto que representa el "intervalo" (aquí es timeout repetido)
+      return {
+        stop: () => { clearTimeout(timer); timer = null; },
+        // para compatibilidad con clearInterval usamos el id mismo
+      };
+    }
+
+    // Detener ciclo automático
+    function detener() {
+      if (intervaloId) {
+        if (typeof intervaloId.stop === 'function') intervaloId.stop();
+        else clearInterval(intervaloId);
+        intervaloId = null;
+      }
+      estadoTexto.textContent = 'Semáforo detenido';
+      apagarTodas();
+    }
+
+    // Modo manual on/off
+    function cambiarModoManual() {
+      modoManual = !modoManual;
+      if (modoManual) {
+        detener();
+        btnModoManual.textContent = 'Modo Automático';
+        estadoTexto.textContent = 'Modo manual — usa "Siguiente"';
+        // dejar el semáforo en el estado actual sin ciclo
+        mostrarEstado(ESTADOS[indice]);
+      } else {
+        btnModoManual.textContent = 'Modo Manual';
+        estadoTexto.textContent = 'Volviendo a modo automático';
+        arrancar();
+      }
+    }
+
+    // Avanzar manualmente una etapa
+    function avanzarManual() {
+      if (intervaloId) {
+        // si está corriendo, avanzar no hace falta (evita conflicto)
+        siguienteEstado();
+        return;
+      }
+      mostrarEstado(ESTADOS[indice]);
+      indice = (indice + 1) % ESTADOS.length;
+    }
+
+    // Conexión de botones
+    btnArrancar.addEventListener('click', arrancar);
+    btnDetener.addEventListener('click', detener);
+    btnSiguiente.addEventListener('click', avanzarManual);
+    btnModoManual.addEventListener('click', cambiarModoManual);
+
+    // Inicial: mostrar todo apagado
+    apagarTodas();
+    estadoTexto.textContent = 'Semáforo listo';
+  </script>
+</body>
+</html>
